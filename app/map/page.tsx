@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import RatingModal from '../../components/RatingModal'
 import PromoModal from '../../components/PromoModal'
@@ -31,8 +31,8 @@ export default function FindPage() {
   const [restrooms, setRestrooms] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
-  const [userLat, setUserLat] = useState(33.6846)
-  const [userLng, setUserLng] = useState(-117.7892)
+  const [userLat, setUserLat] = useState<number|null>(null)
+  const [userLng, setUserLng] = useState<number|null>(null)
   const [locationName, setLocationName] = useState('Locating...')
   const [filter, setFilter] = useState('all')
   const [unit, setUnit] = useState<'mi'|'km'>('mi')
@@ -53,9 +53,10 @@ export default function FindPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchInput, setSearchInput] = useState('')
 
-  const fetchGooglePlaces = async (lat: number, lng: number) => {
+  const fetchGooglePlaces = async (lat: number, lng: number, keyword: string) => {
     try {
-      const res = await fetch(`/api/places?lat=${lat}&lng=${lng}&radius=3000`)
+      const q = keyword ? `&q=${encodeURIComponent(keyword)}` : ''
+      const res = await fetch(`/api/places?lat=${lat}&lng=${lng}&radius=8000${q}`)
       const data = await res.json()
       return data.places || []
     } catch {
@@ -63,63 +64,77 @@ export default function FindPage() {
     }
   }
 
-  const loadData = async (lat: number, lng: number) => {
+  const loadData = async (lat: number, lng: number, keyword: string = '') => {
     setLoading(true)
     const {data, error} = await supabase.from('restroom').select('*')
     const supabaseData = (!error && data) ? data : []
-    const googlePlaces = await fetchGooglePlaces(lat, lng)
+    const googlePlaces = await fetchGooglePlaces(lat, lng, keyword)
     const supabaseIds = new Set(supabaseData.map((r:any) => r.name.toLowerCase()))
     const newPlaces = googlePlaces.filter((p:any) => !supabaseIds.has(p.name.toLowerCase()))
     setRestrooms([...supabaseData, ...newPlaces])
     setLoading(false)
   }
 
+  const getLocation = (onSuccess: (lat: number, lng: number) => void) => {
+    if (!navigator.geolocation) {
+      const defaultLat = 33.6846
+      const defaultLng = -117.7892
+      setUserLat(defaultLat)
+      setUserLng(defaultLng)
+      setLocationName('Default location')
+      onSuccess(defaultLat, defaultLng)
+      return
+    }
+    setLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const lat = pos.coords.latitude
+        const lng = pos.coords.longitude
+        setUserLat(lat)
+        setUserLng(lng)
+        setLocationName('Your location')
+        setLocating(false)
+        onSuccess(lat, lng)
+      },
+      () => {
+        const defaultLat = 33.6846
+        const defaultLng = -117.7892
+        setUserLat(defaultLat)
+        setUserLng(defaultLng)
+        setLocationName('Default: Irvine, CA')
+        setLocating(false)
+        onSuccess(defaultLat, defaultLng)
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    )
+  }
+
   useEffect(() => {
-    // URL'den search query'yi oku
     const params = new URLSearchParams(window.location.search)
     const q = params.get('q') || ''
     setSearchQuery(q)
     setSearchInput(q)
-
     supabase.auth.getSession().then(({data:{session}})=>setUser(session?.user??null))
     supabase.auth.onAuthStateChange((_,session)=>setUser(session?.user??null))
-    if (navigator.geolocation) {
-      setLocating(true)
-      navigator.geolocation.getCurrentPosition(
-        pos => {
-          const lat = pos.coords.latitude
-          const lng = pos.coords.longitude
-          setUserLat(lat)
-          setUserLng(lng)
-          setLocationName('Your location')
-          setLocating(false)
-          loadData(lat, lng)
-        },
-        () => {
-          setLocating(false)
-          loadData(userLat, userLng)
-        }
-      )
-    } else {
-      loadData(userLat, userLng)
-    }
+    getLocation((lat, lng) => {
+      loadData(lat, lng, q)
+    })
   }, [])
 
   const handleSearch = () => {
-    setSearchQuery(searchInput)
+    const q = searchInput.trim()
+    setSearchQuery(q)
     const url = new URL(window.location.href)
-    if (searchInput.trim()) {
-      url.searchParams.set('q', searchInput.trim())
-    } else {
-      url.searchParams.delete('q')
-    }
+    if (q) { url.searchParams.set('q', q) } else { url.searchParams.delete('q') }
     window.history.replaceState({}, '', url.toString())
+    const lat = userLat ?? 33.6846
+    const lng = userLng ?? -117.7892
+    loadData(lat, lng, q)
   }
 
-  const withDistance = restrooms.map(r=>({...r,distance:getDistance(userLat,userLng,r.lat,r.lng)})).sort((a,b)=>a.distance-b.distance)
+  const withDistance = restrooms.map(r=>({...r,distance:getDistance(userLat??33.6846,userLng??-117.7892,r.lat,r.lng)})).sort((a,b)=>a.distance-b.distance)
   const filtered = withDistance.filter(r=>{
-    // Search filtresi
-    if (searchQuery.trim()) {
+    if (searchQuery.trim() && !r.source) {
       const q = searchQuery.toLowerCase()
       const nameMatch = r.name?.toLowerCase().includes(q)
       const addressMatch = r.address?.toLowerCase().includes(q)
@@ -138,38 +153,31 @@ export default function FindPage() {
   const statusLabel = (s:string) => s==='green'?'Community verified':s==='amber'?'Needs update':'Access info unknown'
 
   const openDirections = (r:any) => {
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${r.lat},${r.lng}&travelmode=driving`
-    window.open(url, '_blank')
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${r.lat},${r.lng}&travelmode=driving`, '_blank')
   }
 
   const handleAdd = async () => {
     if (!newEntry.name.trim()) return
     if (containsProfanity(newEntry.name) || containsProfanity(newEntry.address) || containsProfanity(newEntry.pin)) {
-      await supabase.auth.signOut()
-      setUser(null)
-      setShowAddForm(false)
-      setSuccessMsg('⛔ Inappropriate content detected. You have been signed out.')
-      setTimeout(()=>setSuccessMsg(''),5000)
-      return
+      await supabase.auth.signOut(); setUser(null); setShowAddForm(false)
+      setSuccessMsg('⛔ Inappropriate content detected.'); setTimeout(()=>setSuccessMsg(''),5000); return
     }
-    let lat = userLat + (Math.random()-0.5)*0.01
-    let lng = userLng + (Math.random()-0.5)*0.01
+    let lat = (userLat??33.6846) + (Math.random()-0.5)*0.01
+    let lng = (userLng??-117.7892) + (Math.random()-0.5)*0.01
     if (newEntry.address.trim()) {
       const coords = await geocodeAddress(newEntry.address.trim(), process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || '')
       if (coords) { lat = coords.lat; lng = coords.lng }
     }
     await supabase.from('restroom').insert({
       name:newEntry.name.trim(), address:newEntry.address.trim()||'California',
-      lat, lng,
-      pin:newEntry.pin.trim(), score:0, stars:0,
+      lat, lng, pin:newEntry.pin.trim(), score:0, stars:0,
       status:newEntry.pin.trim()?'amber':'red', verified:'Just added',
       type:newEntry.type, accessible:newEntry.accessible,
     })
-    await loadData(userLat, userLng)
+    await loadData(userLat??33.6846, userLng??-117.7892, searchQuery)
     setNewEntry({name:'',address:'',pin:'',type:'cafe',accessible:false})
     setShowAddForm(false)
-    setSuccessMsg('✅ Location added — thank you!')
-    setTimeout(()=>setSuccessMsg(''),3000)
+    setSuccessMsg('✅ Location added — thank you!'); setTimeout(()=>setSuccessMsg(''),3000)
   }
 
   const handleEditOpen = (r:any,e:React.MouseEvent) => {
@@ -188,7 +196,7 @@ export default function FindPage() {
         status:editEntry.pin.trim()?'green':'red', verified:'Just updated',
       }).eq('id',editTarget.id)
     }
-    await loadData(userLat, userLng)
+    await loadData(userLat??33.6846, userLng??-117.7892, searchQuery)
     setShowEditForm(false); setEditTarget(null); setSelected(null)
     setSuccessMsg('✅ Updated — thank you!'); setTimeout(()=>setSuccessMsg(''),3000)
   }
@@ -198,7 +206,6 @@ export default function FindPage() {
 
   return (
     <div style={{minHeight:'100vh',background:'#f8f9fa',fontFamily:"'Inter',system-ui,sans-serif"}}>
-
       <nav style={{background:'white',borderBottom:'1px solid #f0f0f0',padding:'14px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:10}}>
         <a href="/" style={{textDecoration:'none'}}><Logo/></a>
         <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
@@ -211,25 +218,22 @@ export default function FindPage() {
         </div>
       </nav>
 
-      {/* SEARCH KUTUSU */}
       <div style={{background:'white',padding:'12px 16px',borderBottom:'1px solid #f0f0f0'}}>
         <div style={{display:'flex',gap:'0',borderRadius:'12px',overflow:'hidden',border:'2px solid #1D9E75',boxShadow:'0 2px 8px rgba(29,158,117,0.15)'}}>
           <input
             type="text"
-            placeholder={lang==='es'?"Busca Starbucks, Walmart...":"Search Starbucks, Walmart, gas station..."}
+            placeholder={lang==='es'?"Busca Starbucks, burger, gas station...":"Search Starbucks, burger, gas station..."}
             value={searchInput}
             onChange={e=>setSearchInput(e.target.value)}
             onKeyDown={e=>e.key==='Enter'&&handleSearch()}
             style={{flex:1,padding:'14px 16px',fontSize:'16px',border:'none',outline:'none',fontFamily:"'Inter',system-ui,sans-serif",color:'#1a1a1a',background:'white'}}
           />
-          <button onClick={handleSearch} style={{background:'#1D9E75',color:'white',border:'none',padding:'14px 20px',fontSize:'16px',fontWeight:'700',cursor:'pointer',whiteSpace:'nowrap'}}>
-            🔍
-          </button>
+          <button onClick={handleSearch} style={{background:'#1D9E75',color:'white',border:'none',padding:'14px 20px',fontSize:'16px',fontWeight:'700',cursor:'pointer',whiteSpace:'nowrap'}}>🔍</button>
         </div>
         {searchQuery && (
           <div style={{display:'flex',alignItems:'center',gap:'8px',marginTop:'8px'}}>
             <span style={{fontSize:'14px',color:'#555'}}>Results for: <strong style={{color:'#0A2E1F'}}>{searchQuery}</strong></span>
-            <button onClick={()=>{setSearchQuery('');setSearchInput('');window.history.replaceState({},'',(window.location.pathname))}} style={{background:'#f0f0f0',border:'none',borderRadius:'20px',padding:'3px 10px',fontSize:'13px',cursor:'pointer',color:'#666'}}>✕ Clear</button>
+            <button onClick={()=>{setSearchQuery('');setSearchInput('');window.history.replaceState({},'',(window.location.pathname));loadData(userLat??33.6846,userLng??-117.7892,'')}} style={{background:'#f0f0f0',border:'none',borderRadius:'20px',padding:'3px 10px',fontSize:'13px',cursor:'pointer',color:'#666'}}>✕ Clear</button>
           </div>
         )}
       </div>
@@ -238,13 +242,7 @@ export default function FindPage() {
         <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'10px'}}>
           <span style={{fontSize:'14px',color:'#1D9E75'}}>📍</span>
           <span style={{fontSize:'14px',color:'#555',fontWeight:'500'}}>{locating?'Finding your location...':locationName}</span>
-          <button onClick={()=>{
-            setLocating(true)
-            navigator.geolocation.getCurrentPosition(
-              pos=>{const lat=pos.coords.latitude;const lng=pos.coords.longitude;setUserLat(lat);setUserLng(lng);setLocationName('Your location');setLocating(false);loadData(lat,lng)},
-              ()=>setLocating(false)
-            )
-          }} style={{background:'none',border:'none',color:'#1D9E75',fontSize:'13px',cursor:'pointer',fontWeight:'600',marginLeft:'auto'}}>Update location</button>
+          <button onClick={()=>getLocation((lat,lng)=>loadData(lat,lng,searchQuery))} style={{background:'none',border:'none',color:'#1D9E75',fontSize:'13px',cursor:'pointer',fontWeight:'600',marginLeft:'auto'}}>Update location</button>
         </div>
         <div style={{display:'flex',gap:'8px',overflowX:'auto',paddingBottom:'2px'}}>
           {[{id:'all',label:lang==='es'?'Todos':'All'},{id:'verified',label:lang==='es'?'Verificado':'Verified'},{id:'accessible',label:lang==='es'?'Accesible ♿':'Accessible ♿'},{id:'pin',label:lang==='es'?'Tiene código':'Has access info'},{id:'baby',label:lang==='es'?'🍼 Cambiador':'🍼 Baby changing'}].map(f=>(
@@ -258,9 +256,7 @@ export default function FindPage() {
 
       <div style={{padding:'16px 16px 100px'}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'12px'}}>
-          <p style={{fontSize:'14px',color:'#999',fontWeight:'500',margin:0}}>
-            {loading?'Loading...':`${filtered.length} location${filtered.length!==1?'s':''} found`}
-          </p>
+          <p style={{fontSize:'14px',color:'#999',fontWeight:'500',margin:0}}>{loading?'Loading...':`${filtered.length} location${filtered.length!==1?'s':''} found`}</p>
           <button onClick={()=>setShowAddForm(true)} style={{background:'#1D9E75',color:'white',border:'none',width:'38px',height:'38px',borderRadius:'50%',fontSize:'22px',fontWeight:'700',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 8px rgba(29,158,117,0.35)',lineHeight:1}}>+</button>
         </div>
 
@@ -286,7 +282,7 @@ export default function FindPage() {
                   <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'4px'}}>
                     <div style={{width:'9px',height:'9px',borderRadius:'50%',background:statusColor(r.status||'red'),flexShrink:0}}/>
                     <span style={{fontFamily:"'Space Grotesk','Inter',sans-serif",fontSize:'16px',fontWeight:'700',color:'#0A2E1F'}}>{r.name}</span>
-                    {r.accessible&&<span style={{fontSize:'13px'}}>♿</span>}{r.has_baby_changing&&<span style={{fontSize:'13px',marginLeft:'2px'}} title='Baby changing station'>🍼</span>}
+                    {r.accessible&&<span style={{fontSize:'13px'}}>♿</span>}{r.has_baby_changing&&<span style={{fontSize:'13px',marginLeft:'2px'}}>🍼</span>}
                   </div>
                   <p style={{fontSize:'13px',color:'#999',margin:'0 0 8px',paddingLeft:'17px'}}>{r.address}</p>
                   {r.opt_out&&<div style={{background:'#FEE2E2',borderRadius:'8px',padding:'6px 12px',marginLeft:'17px',marginBottom:'6px',display:'inline-flex',alignItems:'center',gap:'6px'}}><span>🚫</span><span style={{fontSize:'13px',fontWeight:'700',color:'#DC2626'}}>Restroom not available to the public</span></div>}
@@ -307,16 +303,12 @@ export default function FindPage() {
               <div style={{borderTop:'1px solid #f5f5f5',padding:'14px 16px',background:'#fafafa'}}>
                 {!showPin?(
                   <div style={{display:'flex',gap:'8px'}}>
-                    {r.opt_out ? (
-                      <div style={{flex:1,background:'#FEE2E2',borderRadius:'9px',padding:'12px',textAlign:'center',fontSize:'14px',color:'#DC2626',fontWeight:'600'}}>
-                        🚫 This business has opted out of FlushPin
-                      </div>
-                    ) : (<>
-                    <button onClick={e=>{e.stopPropagation();setPromoTarget(r);setShowPromo(true)}} style={{flex:1,background:'#1D9E75',color:'white',border:'none',padding:'12px',borderRadius:'9px',fontSize:'15px',fontWeight:'700',cursor:'pointer'}}>
-                      {r.pin?'View access info':'Help us update'}
-                    </button>
-                    <button onClick={e=>{e.stopPropagation();setRatingTarget({...r,_pinWorked:undefined});setShowRating(true)}} style={{flex:1,background:'#F59E0B',color:'white',border:'none',padding:'12px',borderRadius:'9px',fontSize:'15px',fontWeight:'700',cursor:'pointer'}}>⭐ Rate</button>
-                    <button onClick={e=>{e.stopPropagation();openDirections(r)}} style={{flex:1,background:'#0A2E1F',color:'white',border:'none',padding:'12px',borderRadius:'9px',fontSize:'15px',fontWeight:'700',cursor:'pointer'}}>Go →</button>
+                    {r.opt_out?(
+                      <div style={{flex:1,background:'#FEE2E2',borderRadius:'9px',padding:'12px',textAlign:'center',fontSize:'14px',color:'#DC2626',fontWeight:'600'}}>🚫 This business has opted out of FlushPin</div>
+                    ):(<>
+                      <button onClick={e=>{e.stopPropagation();setPromoTarget(r);setShowPromo(true)}} style={{flex:1,background:'#1D9E75',color:'white',border:'none',padding:'12px',borderRadius:'9px',fontSize:'15px',fontWeight:'700',cursor:'pointer'}}>{r.pin?'View access info':'Help us update'}</button>
+                      <button onClick={e=>{e.stopPropagation();setRatingTarget({...r,_pinWorked:undefined});setShowRating(true)}} style={{flex:1,background:'#F59E0B',color:'white',border:'none',padding:'12px',borderRadius:'9px',fontSize:'15px',fontWeight:'700',cursor:'pointer'}}>⭐ Rate</button>
+                      <button onClick={e=>{e.stopPropagation();openDirections(r)}} style={{flex:1,background:'#0A2E1F',color:'white',border:'none',padding:'12px',borderRadius:'9px',fontSize:'15px',fontWeight:'700',cursor:'pointer'}}>Go →</button>
                     </>)}
                   </div>
                 ):(
@@ -331,7 +323,7 @@ export default function FindPage() {
                     ):r.pin==='open'?(
                       <div style={{background:'#E1F5EE',borderRadius:'10px',padding:'14px',textAlign:'center',marginBottom:'10px'}}>
                         <p style={{fontSize:'17px',fontWeight:'700',color:'#085041',margin:0}}>Open access restroom</p>
-                        <p style={{fontSize:'13px',color:'#888',margin:'4px 0 0'}}>No code required — open to customers</p>
+                        <p style={{fontSize:'13px',color:'#888',margin:'4px 0 0'}}>No code required</p>
                       </div>
                     ):(
                       <div style={{background:'#FEE2E2',borderRadius:'10px',padding:'14px',textAlign:'center',marginBottom:'10px'}}>
@@ -343,14 +335,7 @@ export default function FindPage() {
                       <button onClick={e=>{e.stopPropagation();setRatingTarget({...r,_pinWorked:true});setShowRating(true)}} style={{flex:1,background:'#f0faf6',color:'#1D9E75',border:'1px solid #9FE1CB',padding:'10px',borderRadius:'8px',fontSize:'13px',fontWeight:'600',cursor:'pointer'}}>Code worked ✅</button>
                       <button onClick={e=>{e.stopPropagation();setRatingTarget({...r,_pinWorked:false});setShowRating(true)}} style={{flex:1,background:'#FEE2E2',color:'#DC2626',border:'1px solid #FCA5A5',padding:'10px',borderRadius:'8px',fontSize:'13px',fontWeight:'600',cursor:'pointer'}}>Code changed ❌</button>
                       <button onClick={e=>handleEditOpen(r,e)} style={{flex:1,background:'#FEF3C7',color:'#D97706',border:'1px solid #FCD34D',padding:'10px',borderRadius:'8px',fontSize:'13px',fontWeight:'600',cursor:'pointer'}}>Update 🔄</button>
-                      <button onClick={async e=>{e.stopPropagation();if(!r.source){await supabase.from('restroom').update({has_baby_changing:!r.has_baby_changing}).eq('id',r.id);loadData(userLat,userLng)}else{
-              const {data:inserted} = await supabase.from('restroom').insert({
-                name:r.name, address:r.address, lat:r.lat, lng:r.lng,
-                pin:'', score:0, stars:0, status:'red', verified:'Community added',
-                type:r.type||'other', accessible:false, has_baby_changing:true
-              }).select().single()
-              if(inserted) loadData(userLat,userLng)
-            }}} style={{flex:1,background:r.has_baby_changing?'#FDF4FF':'#f5f5f5',color:r.has_baby_changing?'#7E22CE':'#888',border:r.has_baby_changing?'1px solid #E9D5FF':'1px solid #eee',padding:'10px',borderRadius:'8px',fontSize:'13px',fontWeight:'600',cursor:'pointer'}}>{r.has_baby_changing?'🍼 Yes':'🍼 Baby?'}</button>
+                      <button onClick={async e=>{e.stopPropagation();if(!r.source){await supabase.from('restroom').update({has_baby_changing:!r.has_baby_changing}).eq('id',r.id);loadData(userLat??33.6846,userLng??-117.7892,searchQuery)}else{const {data:inserted}=await supabase.from('restroom').insert({name:r.name,address:r.address,lat:r.lat,lng:r.lng,pin:'',score:0,stars:0,status:'red',verified:'Community added',type:r.type||'other',accessible:false,has_baby_changing:true}).select().single();if(inserted)loadData(userLat??33.6846,userLng??-117.7892,searchQuery)}}} style={{flex:1,background:r.has_baby_changing?'#FDF4FF':'#f5f5f5',color:r.has_baby_changing?'#7E22CE':'#888',border:r.has_baby_changing?'1px solid #E9D5FF':'1px solid #eee',padding:'10px',borderRadius:'8px',fontSize:'13px',fontWeight:'600',cursor:'pointer'}}>{r.has_baby_changing?'🍼 Yes':'🍼 Baby?'}</button>
                     </div>
                   </div>
                 )}
@@ -360,16 +345,8 @@ export default function FindPage() {
         ))}
       </div>
 
-      {showPromo&&promoTarget&&(
-        <PromoModal restroom={promoTarget} onComplete={()=>{setShowPromo(false);setShowPin(true)}}/>
-      )}
-
-      {showRating&&ratingTarget&&(
-        <RatingModal restroom={ratingTarget} user={user} onClose={()=>setShowRating(false)}
-          onDone={()=>{setShowRating(false);setSuccessMsg('✅ Thank you for your contribution!');setTimeout(()=>setSuccessMsg(''),3000);loadData(userLat,userLng)}}
-          initialPinWorked={ratingTarget?._pinWorked}
-        />
-      )}
+      {showPromo&&promoTarget&&(<PromoModal restroom={promoTarget} onComplete={()=>{setShowPromo(false);setShowPin(true)}}/>)}
+      {showRating&&ratingTarget&&(<RatingModal restroom={ratingTarget} user={user} onClose={()=>setShowRating(false)} onDone={()=>{setShowRating(false);setSuccessMsg('✅ Thank you!');setTimeout(()=>setSuccessMsg(''),3000);loadData(userLat??33.6846,userLng??-117.7892,searchQuery)}} initialPinWorked={ratingTarget?._pinWorked}/>)}
 
       {showAddForm&&(
         <div onClick={()=>setShowAddForm(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:50,display:'flex',alignItems:'flex-end'}}>
@@ -378,7 +355,7 @@ export default function FindPage() {
               <h2 style={{margin:0,fontSize:'19px',fontWeight:'700',color:'#0A2E1F'}}>Add a location</h2>
               <button onClick={()=>setShowAddForm(false)} style={{background:'none',border:'none',fontSize:'26px',cursor:'pointer',color:'#999'}}>✕</button>
             </div>
-            <p style={{fontSize:'14px',color:'#999',margin:'0 0 16px'}}>Only share publicly available customer access codes. Respect business policies.</p>
+            <p style={{fontSize:'14px',color:'#999',margin:'0 0 16px'}}>Only share publicly available customer access codes.</p>
             <div style={{display:'flex',flexDirection:'column',gap:'14px'}}>
               <div><label style={labelStyle}>Business Name *</label><input style={inputStyle} placeholder="e.g. Starbucks on Main St" value={newEntry.name} onChange={e=>setNewEntry(p=>({...p,name:e.target.value}))}/></div>
               <div><label style={labelStyle}>Address</label><input style={inputStyle} placeholder="e.g. 123 Main St, San Francisco" value={newEntry.address} onChange={e=>setNewEntry(p=>({...p,address:e.target.value}))}/></div>
@@ -423,7 +400,6 @@ export default function FindPage() {
           </div>
         </div>
       )}
-
     </div>
   )
 }
