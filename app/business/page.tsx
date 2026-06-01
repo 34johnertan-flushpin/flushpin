@@ -95,16 +95,23 @@ const faqs = [
   {q:"Can I manage multiple locations?", a:"Yes — Platinum plan includes multi-location management from a single dashboard. Perfect for chains and franchises."},
   {q:"Is there a contract?", a:"No contracts, cancel anytime. All plans are billed monthly."},
   {q:"How do I get the QR code sticker?", a:"Gold and Platinum subscribers receive a physical QR sticker pack by mail. Customers scan it to see your live PIN and cleanliness score."},
+  {q:"What is the free door sticker?", a:"Any business can request a complimentary FlushPin door sticker — no subscription required. We mail it to you free. It lets your customers know your restroom is listed and verified on FlushPin."},
 ]
 
 export default function BusinessPage() {
   const [billing, setBilling] = useState<'monthly'|'yearly'>('monthly')
   const [openFaq, setOpenFaq] = useState<number|null>(null)
   const [showContact, setShowContact] = useState(false)
+  const [showStickerForm, setShowStickerForm] = useState(false)
   const [form, setForm] = useState({name:'',business:'',email:'',plan:'Gold',message:''})
+  const [stickerForm, setStickerForm] = useState({name:'',business:'',address:'',city:'',zip:'',email:''})
   const [sent, setSent] = useState(false)
+  const [stickerSent, setStickerSent] = useState(false)
 
   const price = (p:number) => billing==='yearly' ? Math.round(p*0.8) : p
+
+  const inputStyle = {width:'100%',padding:'11px 14px',borderRadius:'9px',border:'1px solid #e0e0e0',fontSize:'14px',outline:'none',boxSizing:'border-box' as const,color:'#1a1a1a',fontFamily:"'Inter',system-ui,sans-serif"}
+  const labelStyle = {fontSize:'12px',fontWeight:'600' as const,color:'#444',marginBottom:'6px',display:'block' as const}
 
   return (
     <main style={{margin:0,padding:0,fontFamily:"'Inter',system-ui,sans-serif",background:"#fff",minHeight:"100vh"}}>
@@ -129,7 +136,7 @@ export default function BusinessPage() {
         </p>
         <div style={{display:"flex",gap:"12px",justifyContent:"center",flexWrap:"wrap"}}>
           <button onClick={()=>setShowContact(true)} style={{background:"#1D9E75",color:"white",padding:"14px 32px",borderRadius:"11px",border:"none",fontSize:"16px",fontWeight:"700",cursor:"pointer"}}>List your business →</button>
-          <a href="/map" style={{background:"white",color:"#0A2E1F",padding:"14px 32px",borderRadius:"11px",textDecoration:"none",fontSize:"16px",border:"1.5px solid #e0e0e0",fontWeight:"600"}}>See the map</a>
+          <button onClick={()=>{const el=document.getElementById('sticker-section');el?.scrollIntoView({behavior:'smooth'})}} style={{background:"white",color:"#0A2E1F",padding:"14px 32px",borderRadius:"11px",fontSize:"16px",border:"1.5px solid #e0e0e0",fontWeight:"600",cursor:"pointer"}}>Get free sticker 🏷️</button>
         </div>
       </section>
 
@@ -148,6 +155,107 @@ export default function BusinessPage() {
               <div style={{fontSize:"11px",color:"#999",marginTop:"2px"}}>{s.sub}</div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* FREE STICKER SECTION */}
+      <section id="sticker-section" style={{padding:"0 20px 80px",maxWidth:"960px",margin:"0 auto"}}>
+        <div style={{background:"linear-gradient(135deg,#0A2E1F 0%,#1a4a32 100%)",borderRadius:"24px",overflow:"hidden",position:"relative"}}>
+          
+          {/* Background decoration */}
+          <div style={{position:"absolute",top:"-40px",right:"-40px",width:"200px",height:"200px",borderRadius:"50%",background:"rgba(29,158,117,0.15)"}}/>
+          <div style={{position:"absolute",bottom:"-20px",left:"-20px",width:"120px",height:"120px",borderRadius:"50%",background:"rgba(29,158,117,0.1)"}}/>
+
+          <div style={{display:"flex",flexWrap:"wrap",gap:"0",position:"relative",zIndex:1}}>
+            
+            {/* Left: Sticker visual */}
+            <div style={{flex:"1",minWidth:"280px",padding:"48px 40px",display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"center"}}>
+              
+              {/* Sticker mockup */}
+              <div style={{position:"relative",marginBottom:"28px"}}>
+                {/* Door frame */}
+                <div style={{width:"180px",height:"220px",background:"#8B6914",borderRadius:"8px 8px 0 0",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"4px 4px 20px rgba(0,0,0,0.4)"}}>
+                  <div style={{width:"160px",height:"200px",background:"#A0783A",borderRadius:"6px 6px 0 0",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
+                    
+                    {/* Door panel detail */}
+                    <div style={{position:"absolute",top:"20px",left:"10px",right:"10px",height:"70px",border:"2px solid rgba(255,255,255,0.1)",borderRadius:"4px"}}/>
+                    <div style={{position:"absolute",bottom:"40px",left:"10px",right:"10px",height:"60px",border:"2px solid rgba(255,255,255,0.1)",borderRadius:"4px"}}/>
+                    
+                    {/* Door knob */}
+                    <div style={{position:"absolute",right:"12px",top:"50%",width:"14px",height:"14px",borderRadius:"50%",background:"#C8A84B",boxShadow:"0 2px 4px rgba(0,0,0,0.3)"}}/>
+                    
+                    {/* STICKER on door */}
+                    <div style={{
+                      position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",
+                      width:"90px",height:"90px",
+                      background:"linear-gradient(135deg,#1D9E75,#0A5C42)",
+                      borderRadius:"12px",
+                      display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+                      gap:"4px",
+                      boxShadow:"0 4px 16px rgba(0,0,0,0.4)",
+                      border:"3px solid rgba(255,255,255,0.3)"
+                    }}>
+                      {/* Mini logo dots */}
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"2px",width:"20px",marginBottom:"2px"}}>
+                        {[1,1,1,1,1,1,0,1,0].map((v,i)=>(<div key={i} style={{width:"5px",height:"5px",borderRadius:"50%",background:v?"white":"rgba(255,255,255,0.2)"}}/>))}
+                      </div>
+                      <div style={{width:0,height:0,borderLeft:"4px solid transparent",borderRight:"4px solid transparent",borderTop:"6px solid rgba(255,255,255,0.9)",marginTop:"-2px"}}/>
+                      <div style={{fontSize:"9px",fontWeight:"800",color:"white",letterSpacing:"0.5px",marginTop:"3px"}}>FlushPin</div>
+                      <div style={{fontSize:"7px",color:"rgba(255,255,255,0.7)",letterSpacing:"0.3px"}}>VERIFIED ✓</div>
+                    </div>
+                  </div>
+                </div>
+                {/* Floor */}
+                <div style={{width:"180px",height:"10px",background:"#5a4520",borderRadius:"0 0 4px 4px"}}/>
+              </div>
+
+              <p style={{fontSize:"13px",color:"rgba(255,255,255,0.5)",textAlign:"center",margin:0,fontStyle:"italic"}}>Your door. Your trust signal.</p>
+            </div>
+
+            {/* Right: Content + form */}
+            <div style={{flex:"1.4",minWidth:"280px",padding:"48px 40px 48px 20px"}}>
+              <div style={{display:"inline-block",background:"rgba(29,158,117,0.25)",color:"#9FE1CB",fontSize:"12px",padding:"5px 14px",borderRadius:"20px",marginBottom:"16px",fontWeight:"600",letterSpacing:"0.5px"}}>
+                🏷️ FREE — NO SUBSCRIPTION NEEDED
+              </div>
+              <h2 style={{fontFamily:"'Space Grotesk','Inter',sans-serif",fontSize:"clamp(22px,4vw,32px)",fontWeight:"700",color:"white",marginBottom:"14px",lineHeight:"1.2",letterSpacing:"-0.5px"}}>
+                Get your free<br/>FlushPin door sticker
+              </h2>
+              <p style={{fontSize:"15px",color:"#9FE1CB",lineHeight:"1.7",marginBottom:"24px"}}>
+                Let your customers know you're on FlushPin. We'll mail you a professional door sticker — completely free, no strings attached.
+              </p>
+
+              {/* Benefits */}
+              <div style={{display:"flex",flexDirection:"column",gap:"10px",marginBottom:"28px"}}>
+                {[
+                  {icon:"👁️", text:"Customers see you're verified before they walk in"},
+                  {icon:"📱", text:"QR code links directly to your FlushPin listing"},
+                  {icon:"🏆", text:"Builds instant trust — clean restroom = caring business"},
+                  {icon:"📬", text:"Mailed to your door, anywhere in California"},
+                ].map((b,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"flex-start",gap:"10px"}}>
+                    <span style={{fontSize:"16px",flexShrink:0,marginTop:"1px"}}>{b.icon}</span>
+                    <span style={{fontSize:"14px",color:"rgba(255,255,255,0.8)",lineHeight:"1.5"}}>{b.text}</span>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={()=>setShowStickerForm(true)}
+                style={{
+                  background:"#1D9E75",color:"white",border:"none",
+                  padding:"15px 32px",borderRadius:"11px",
+                  fontSize:"16px",fontWeight:"700",cursor:"pointer",
+                  boxShadow:"0 4px 16px rgba(29,158,117,0.4)",
+                  display:"flex",alignItems:"center",gap:"8px"
+                }}
+              >
+                📬 Request my free sticker
+              </button>
+              <p style={{fontSize:"12px",color:"rgba(255,255,255,0.35)",marginTop:"12px",margin:"12px 0 0"}}>
+                Free for all California businesses. Ships within 5–7 business days.
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -177,8 +285,6 @@ export default function BusinessPage() {
       <section style={{padding:"0 20px 60px",maxWidth:"980px",margin:"0 auto"}}>
         <h2 style={{textAlign:"center",fontFamily:"'Space Grotesk','Inter',sans-serif",fontSize:"clamp(22px,4vw,30px)",fontWeight:"700",color:"#0A2E1F",marginBottom:"10px"}}>Simple, transparent pricing</h2>
         <p style={{textAlign:"center",color:"#999",marginBottom:"24px",fontSize:"15px"}}>No hidden fees. Cancel anytime.</p>
-
-        {/* Billing toggle */}
         <div style={{display:"flex",justifyContent:"center",marginBottom:"36px"}}>
           <div style={{display:"flex",background:"#f5f5f5",borderRadius:"10px",padding:"4px",gap:"4px"}}>
             <button onClick={()=>setBilling('monthly')} style={{padding:"8px 20px",borderRadius:"8px",border:"none",fontSize:"13px",fontWeight:"600",cursor:"pointer",background:billing==='monthly'?"white":"transparent",color:billing==='monthly'?"#0A2E1F":"#999",boxShadow:billing==='monthly'?"0 1px 4px rgba(0,0,0,0.1)":"none"}}>Monthly</button>
@@ -187,7 +293,6 @@ export default function BusinessPage() {
             </button>
           </div>
         </div>
-
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))",gap:"16px",alignItems:"start"}}>
           {plans.map((plan,i)=>(
             <div key={i} style={{background:plan.color,borderRadius:"18px",padding:"24px 20px",position:"relative",border:plan.popular?"2px solid #D97706":"2px solid transparent"}}>
@@ -258,7 +363,10 @@ export default function BusinessPage() {
         <div style={{background:"linear-gradient(135deg,#0A2E1F 0%,#1a4a32 100%)",borderRadius:"20px",padding:"48px 28px"}}>
           <h2 style={{fontFamily:"'Space Grotesk','Inter',sans-serif",fontSize:"clamp(22px,4vw,30px)",fontWeight:"700",color:"white",marginBottom:"14px"}}>Ready to get listed?</h2>
           <p style={{color:"#9FE1CB",fontSize:"15px",marginBottom:"28px",lineHeight:"1.6"}}>Join the businesses building trust with FlushPin. Start free, upgrade anytime.</p>
-          <button onClick={()=>setShowContact(true)} style={{background:"#1D9E75",color:"white",border:"none",padding:"15px 36px",borderRadius:"11px",fontSize:"16px",fontWeight:"700",cursor:"pointer"}}>List your business for free →</button>
+          <div style={{display:"flex",gap:"12px",justifyContent:"center",flexWrap:"wrap"}}>
+            <button onClick={()=>setShowContact(true)} style={{background:"#1D9E75",color:"white",border:"none",padding:"15px 36px",borderRadius:"11px",fontSize:"16px",fontWeight:"700",cursor:"pointer"}}>List your business for free →</button>
+            <button onClick={()=>setShowStickerForm(true)} style={{background:"rgba(255,255,255,0.1)",color:"white",border:"1.5px solid rgba(255,255,255,0.2)",padding:"15px 36px",borderRadius:"11px",fontSize:"16px",fontWeight:"600",cursor:"pointer"}}>Get free sticker 🏷️</button>
+          </div>
         </div>
       </section>
 
@@ -273,9 +381,85 @@ export default function BusinessPage() {
           </div>
           <span style={{fontFamily:"'Space Grotesk','Inter',sans-serif",fontSize:"18px",fontWeight:"700",color:"white"}}>FlushPin</span>
         </div>
-        <div style={{fontSize:"12px",color:"#5DCAA5",marginBottom:"6px"}}>flushpin.com — Orange County, California</div>
+        <div style={{fontSize:"12px",color:"#5DCAA5",marginBottom:"6px"}}>flushpin.com — California</div>
         <div style={{fontSize:"11px",color:"#2D6A4F"}}>Find it. Rate it. Flush it.</div>
       </footer>
+
+      {/* STICKER FORM MODAL */}
+      {showStickerForm && (
+        <div onClick={()=>{setShowStickerForm(false);setStickerSent(false)}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"white",borderRadius:"20px",padding:"28px 24px",width:"100%",maxWidth:"440px",maxHeight:"90vh",overflowY:"auto"}}>
+            {stickerSent ? (
+              <div style={{textAlign:"center",padding:"20px 0"}}>
+                <div style={{fontSize:"56px",marginBottom:"16px"}}>📬</div>
+                <h2 style={{fontSize:"22px",fontWeight:"700",color:"#0A2E1F",marginBottom:"12px"}}>Sticker on its way!</h2>
+                <p style={{fontSize:"15px",color:"#555",lineHeight:"1.7",marginBottom:"8px"}}>
+                  We'll send your free FlushPin door sticker to <strong>{stickerForm.address}, {stickerForm.city}</strong> within 5–7 business days.
+                </p>
+                <p style={{fontSize:"13px",color:"#999"}}>Check your email at <strong>{stickerForm.email}</strong> for confirmation.</p>
+                <button onClick={()=>{setShowStickerForm(false);setStickerSent(false)}} style={{marginTop:"24px",background:"#1D9E75",color:"white",border:"none",padding:"12px 28px",borderRadius:"10px",fontSize:"15px",fontWeight:"700",cursor:"pointer"}}>Done ✓</button>
+              </div>
+            ) : (
+              <>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}}>
+                  <h2 style={{margin:0,fontSize:"20px",fontWeight:"700",color:"#0A2E1F"}}>Get your free sticker</h2>
+                  <button onClick={()=>setShowStickerForm(false)} style={{background:"none",border:"none",fontSize:"24px",cursor:"pointer",color:"#999"}}>✕</button>
+                </div>
+                <p style={{fontSize:"13px",color:"#999",marginBottom:"22px"}}>Fill in your details and we'll mail it to your business — completely free.</p>
+
+                {/* Sticker preview */}
+                <div style={{background:"linear-gradient(135deg,#0A2E1F,#1a4a32)",borderRadius:"14px",padding:"20px",marginBottom:"22px",display:"flex",alignItems:"center",gap:"16px"}}>
+                  <div style={{width:"60px",height:"60px",background:"linear-gradient(135deg,#1D9E75,#0A5C42)",borderRadius:"10px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"3px",flexShrink:0,border:"2px solid rgba(255,255,255,0.2)"}}>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"2px",width:"16px"}}>
+                      {[1,1,1,1,1,1,0,1,0].map((v,i)=>(<div key={i} style={{width:"4px",height:"4px",borderRadius:"50%",background:v?"white":"rgba(255,255,255,0.2)"}}/>))}
+                    </div>
+                    <div style={{width:0,height:0,borderLeft:"3px solid transparent",borderRight:"3px solid transparent",borderTop:"5px solid rgba(255,255,255,0.9)",marginTop:"-1px"}}/>
+                    <div style={{fontSize:"7px",fontWeight:"700",color:"white",letterSpacing:"0.3px"}}>FlushPin</div>
+                  </div>
+                  <div>
+                    <div style={{fontSize:"14px",fontWeight:"700",color:"white",marginBottom:"4px"}}>FlushPin Verified ✓</div>
+                    <div style={{fontSize:"12px",color:"#9FE1CB"}}>Professional vinyl sticker · 3×3 inch</div>
+                    <div style={{fontSize:"12px",color:"#9FE1CB"}}>Weather-resistant · QR code included</div>
+                  </div>
+                </div>
+
+                <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
+                  {[
+                    {label:"Your name",key:"name",placeholder:"John Smith",type:"text"},
+                    {label:"Business name",key:"business",placeholder:"e.g. Main Street Café",type:"text"},
+                    {label:"Business address",key:"address",placeholder:"123 Main St",type:"text"},
+                    {label:"City",key:"city",placeholder:"Irvine",type:"text"},
+                    {label:"ZIP code",key:"zip",placeholder:"92612",type:"text"},
+                    {label:"Email address",key:"email",placeholder:"you@business.com",type:"email"},
+                  ].map(field=>(
+                    <div key={field.key}>
+                      <label style={labelStyle}>{field.label}</label>
+                      <input
+                        type={field.type}
+                        placeholder={field.placeholder}
+                        value={stickerForm[field.key as keyof typeof stickerForm]}
+                        onChange={e=>setStickerForm(p=>({...p,[field.key]:e.target.value}))}
+                        style={inputStyle}
+                      />
+                    </div>
+                  ))}
+
+                  <button
+                    onClick={()=>{
+                      if(stickerForm.name&&stickerForm.business&&stickerForm.address&&stickerForm.city&&stickerForm.email)
+                        setStickerSent(true)
+                    }}
+                    style={{background:"#1D9E75",color:"white",border:"none",padding:"14px",borderRadius:"10px",fontSize:"15px",fontWeight:"700",cursor:"pointer"}}
+                  >
+                    Send me my free sticker 📬
+                  </button>
+                  <p style={{fontSize:"11px",color:"#aaa",margin:0,textAlign:"center"}}>Free for California businesses. No credit card. No subscription.</p>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* CONTACT MODAL */}
       {showContact && (
@@ -285,7 +469,6 @@ export default function BusinessPage() {
               <h2 style={{margin:0,fontSize:"20px",fontWeight:"700",color:"#0A2E1F"}}>{sent?'✅ Message sent!':'List your business'}</h2>
               <button onClick={()=>{setShowContact(false);setSent(false)}} style={{background:"none",border:"none",fontSize:"24px",cursor:"pointer",color:"#999"}}>✕</button>
             </div>
-
             {sent ? (
               <div style={{textAlign:"center",padding:"20px 0"}}>
                 <div style={{fontSize:"48px",marginBottom:"16px"}}>🎉</div>
@@ -299,25 +482,25 @@ export default function BusinessPage() {
                   {label:"Email address",key:"email",placeholder:"you@business.com",type:"email"},
                 ].map(field=>(
                   <div key={field.key}>
-                    <label style={{fontSize:"12px",fontWeight:"600",color:"#444",marginBottom:"6px",display:"block"}}>{field.label}</label>
+                    <label style={labelStyle}>{field.label}</label>
                     <input
                       type={field.type}
                       placeholder={field.placeholder}
                       value={form[field.key as keyof typeof form]}
                       onChange={e=>setForm(p=>({...p,[field.key]:e.target.value}))}
-                      style={{width:"100%",padding:"11px 14px",borderRadius:"9px",border:"1px solid #e0e0e0",fontSize:"14px",outline:"none",boxSizing:"border-box",color:"#1a1a1a",fontFamily:"'Inter',system-ui,sans-serif"}}
+                      style={inputStyle}
                     />
                   </div>
                 ))}
                 <div>
-                  <label style={{fontSize:"12px",fontWeight:"600",color:"#444",marginBottom:"6px",display:"block"}}>Interested plan</label>
-                  <select value={form.plan} onChange={e=>setForm(p=>({...p,plan:e.target.value}))} style={{width:"100%",padding:"11px 14px",borderRadius:"9px",border:"1px solid #e0e0e0",fontSize:"14px",outline:"none",boxSizing:"border-box",color:"#1a1a1a",fontFamily:"'Inter',system-ui,sans-serif"}}>
+                  <label style={labelStyle}>Interested plan</label>
+                  <select value={form.plan} onChange={e=>setForm(p=>({...p,plan:e.target.value}))} style={inputStyle}>
                     <option>Free</option><option>Silver</option><option>Gold</option><option>Platinum</option>
                   </select>
                 </div>
                 <div>
-                  <label style={{fontSize:"12px",fontWeight:"600",color:"#444",marginBottom:"6px",display:"block"}}>Message (optional)</label>
-                  <textarea value={form.message} onChange={e=>setForm(p=>({...p,message:e.target.value}))} placeholder="Tell us about your business..." style={{width:"100%",padding:"11px 14px",borderRadius:"9px",border:"1px solid #e0e0e0",fontSize:"14px",outline:"none",boxSizing:"border-box",color:"#1a1a1a",resize:"none",height:"80px",fontFamily:"'Inter',system-ui,sans-serif"}}/>
+                  <label style={labelStyle}>Message (optional)</label>
+                  <textarea value={form.message} onChange={e=>setForm(p=>({...p,message:e.target.value}))} placeholder="Tell us about your business..." style={{...inputStyle,resize:"none",height:"80px"}}/>
                 </div>
                 <button onClick={()=>{if(form.name&&form.email&&form.business)setSent(true)}} style={{background:"#1D9E75",color:"white",border:"none",padding:"14px",borderRadius:"10px",fontSize:"15px",fontWeight:"700",cursor:"pointer"}}>
                   Send request →
