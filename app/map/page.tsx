@@ -162,7 +162,7 @@ export default function FindPage() {
     if (!editTarget.source) {
       await supabase.from('restroom').update({
         pin:editEntry.pin.trim(), accessible:editEntry.accessible,
-        status:editEntry.pin.trim()?'green':'red', verified:'Just updated',
+        status:editEntry.pin.trim()?'green':'red', verified:'Just updated', pin_updated_at: new Date().toISOString(),
       }).eq('id',editTarget.id)
     } else {
       await supabase.from('restroom').insert({
