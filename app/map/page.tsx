@@ -17,11 +17,33 @@ function getDistanceMeters(lat1:number, lng1:number, lat2:number, lng2:number) {
   return getDistance(lat1, lng1, lat2, lng2) * 1609.34
 }
 
+const RADIUS_MILES = 12
+
 function nameSimilar(a:string, b:string) {
   const clean = (s:string) => s.toLowerCase().replace(/[^a-z0-9]/g,'').trim()
   const ca = clean(a)
   const cb = clean(b)
   return ca.includes(cb) || cb.includes(ca) || ca === cb
+}
+
+type MapPlace = { name?: string; address?: string; lat: number; lng: number; [key: string]: unknown }
+
+function matchesSearch(r: MapPlace, query: string) {
+  if (!query.trim()) return true
+  const tokens = query.toLowerCase().split(/\s+/).filter(t => t.length >= 2)
+  if (tokens.length === 0) return true
+  const haystack = `${(r.name || '').toLowerCase()} ${(r.address || '').toLowerCase()}`
+  return tokens.every(t => haystack.includes(t))
+}
+
+function withinRadius(r: MapPlace, lat: number, lng: number, miles: number) {
+  return getDistance(lat, lng, r.lat, r.lng) <= miles
+}
+
+function bboxDeltas(lat: number, miles: number) {
+  const latDelta = miles / 69
+  const lngDelta = miles / (69 * Math.cos(lat * Math.PI / 180))
+  return { latDelta, lngDelta }
 }
 
 const Logo = () => (
@@ -64,55 +86,104 @@ export default function FindPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchInput, setSearchInput] = useState('')
 
+  const resolveCityLabel = async (lat: number, lng: number) => {
+    try {
+      const res = await fetch(`/api/geocode?lat=${lat}&lng=${lng}`)
+      const data = await res.json()
+      return data.label || 'Your area'
+    } catch {
+      return 'Your area'
+    }
+  }
+
   const fetchGooglePlaces = async (lat: number, lng: number, keyword: string) => {
     try {
       const q = keyword ? `&q=${encodeURIComponent(keyword)}` : ''
-      const res = await fetch(`/api/places?lat=${lat}&lng=${lng}&radius=8000${q}`)
+      const radiusMeters = Math.round(RADIUS_MILES * 1609.34)
+      const res = await fetch(`/api/places?lat=${lat}&lng=${lng}&radius=${radiusMeters}${q}`)
       const data = await res.json()
-      return data.places || []
+      return (data.places || []).filter((p: { lat: number; lng: number }) =>
+        withinRadius(p, lat, lng, RADIUS_MILES)
+      )
     } catch {
       return []
     }
   }
 
+  const fetchSupabaseNearby = async (lat: number, lng: number, keyword: string) => {
+    const { data: rpcData, error: rpcError } = await supabase.rpc('get_nearby_restrooms', {
+      user_lat: lat,
+      user_lng: lng,
+      radius_miles: RADIUS_MILES,
+      search_text: keyword,
+      baby_filter: false,
+    })
+    if (!rpcError && rpcData) {
+      return rpcData.filter((r: MapPlace) =>
+        withinRadius(r, lat, lng, RADIUS_MILES) && matchesSearch(r, keyword)
+      )
+    }
+
+    const { latDelta, lngDelta } = bboxDeltas(lat, RADIUS_MILES)
+    const { data, error } = await supabase
+      .from('restroom')
+      .select('*')
+      .gte('lat', lat - latDelta)
+      .lte('lat', lat + latDelta)
+      .gte('lng', lng - lngDelta)
+      .lte('lng', lng + lngDelta)
+      .limit(300)
+
+    if (error || !data) return []
+
+    return data.filter(r =>
+      withinRadius(r, lat, lng, RADIUS_MILES) && matchesSearch(r, keyword)
+    )
+  }
+
   const loadData = async (lat: number, lng: number, keyword: string = '') => {
     setLoading(true)
-    const {data, error} = await supabase.from('restroom').select('*')
-    const supabaseData = (!error && data) ? data : []
-    const googlePlaces = await fetchGooglePlaces(lat, lng, keyword)
+    const [supabaseData, googlePlaces] = await Promise.all([
+      fetchSupabaseNearby(lat, lng, keyword),
+      fetchGooglePlaces(lat, lng, keyword),
+    ])
 
-    // Duplicate kontrolü: isim benzerliği VEYA 100 metre mesafe
-    const newPlaces = googlePlaces.filter((gp:any) => {
-      return !supabaseData.some((sp:any) => {
+    const newPlaces = googlePlaces.filter((gp: { name: string; lat: number; lng: number }) =>
+      !supabaseData.some((sp: { name: string; lat: number; lng: number }) => {
         const sameish = nameSimilar(sp.name, gp.name)
         const tooClose = getDistanceMeters(sp.lat, sp.lng, gp.lat, gp.lng) < 100
         return sameish || tooClose
       })
-    })
+    )
 
     setRestrooms([...supabaseData, ...newPlaces])
     setLoading(false)
   }
 
   const getLocation = (onSuccess: (lat: number, lng: number) => void) => {
+    const applyLocation = async (lat: number, lng: number, fallbackLabel?: string) => {
+      setUserLat(lat)
+      setUserLng(lng)
+      setLocating(false)
+      const label = fallbackLabel || await resolveCityLabel(lat, lng)
+      setLocationName(label)
+      onSuccess(lat, lng)
+    }
+
     if (!navigator.geolocation) {
-      setUserLat(33.6846); setUserLng(-117.7892); setLocationName('Default location')
-      onSuccess(33.6846, -117.7892); return
+      applyLocation(33.6846, -117.7892, 'Irvine, CA')
+      return
     }
     setLocating(true)
     navigator.geolocation.getCurrentPosition(
-      pos => {
-        const lat = pos.coords.latitude; const lng = pos.coords.longitude
-        setUserLat(lat); setUserLng(lng); setLocationName('Your location'); setLocating(false)
-        onSuccess(lat, lng)
-      },
-      () => {
-        setUserLat(33.6846); setUserLng(-117.7892); setLocationName('Default: Irvine, CA'); setLocating(false)
-        onSuccess(33.6846, -117.7892)
-      },
+      pos => applyLocation(pos.coords.latitude, pos.coords.longitude),
+      () => applyLocation(33.6846, -117.7892, 'Irvine, CA'),
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     )
   }
+
+  const anchorLat = userLat ?? 33.6846
+  const anchorLng = userLng ?? -117.7892
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -129,15 +200,12 @@ export default function FindPage() {
     const url = new URL(window.location.href)
     if (q) { url.searchParams.set('q', q) } else { url.searchParams.delete('q') }
     window.history.replaceState({}, '', url.toString())
-    loadData(userLat??33.6846, userLng??-117.7892, q)
+    loadData(anchorLat, anchorLng, q)
   }
-
-  const withDistance = restrooms.map(r=>({...r,distance:getDistance(userLat??33.6846,userLng??-117.7892,r.lat,r.lng)})).sort((a,b)=>a.distance-b.distance)
-  const filtered = withDistance.filter(r=>{
-    if (searchQuery.trim() && !r.source) {
-      const q = searchQuery.toLowerCase()
-      if (!r.name?.toLowerCase().includes(q) && !r.address?.toLowerCase().includes(q)) return false
-    }
+  const withDistance = restrooms
+    .map(r => ({ ...r, distance: getDistance(anchorLat, anchorLng, r.lat, r.lng) }))
+    .sort((a, b) => a.distance - b.distance)
+  const filtered = withDistance.filter(r => {
     if (emergency) return r.status==='green'
     if (filter==='verified') return r.status==='green'
     if (filter==='accessible') return r.accessible
@@ -173,7 +241,7 @@ export default function FindPage() {
         accessible:editEntry.accessible,
       })
     }
-    await loadData(userLat??33.6846, userLng??-117.7892, searchQuery)
+    await loadData(anchorLat, anchorLng, searchQuery)
     setShowEditForm(false); setEditTarget(null); setSelected(null)
     setSuccessMsg('✅ Updated — thank you!'); setTimeout(()=>setSuccessMsg(''),3000)
   }
@@ -207,9 +275,11 @@ export default function FindPage() {
           <button onClick={handleSearch} style={{background:'#1D9E75',color:'white',border:'none',padding:'14px 20px',fontSize:'16px',fontWeight:'700',cursor:'pointer'}}>🔍</button>
         </div>
         {searchQuery&&(
-          <div style={{display:'flex',alignItems:'center',gap:'8px',marginTop:'8px'}}>
-            <span style={{fontSize:'14px',color:'#555'}}>Results for: <strong style={{color:'#0A2E1F'}}>{searchQuery}</strong></span>
-            <button onClick={()=>{setSearchQuery('');setSearchInput('');window.history.replaceState({},'',(window.location.pathname));loadData(userLat??33.6846,userLng??-117.7892,'')}} style={{background:'#f0f0f0',border:'none',borderRadius:'20px',padding:'3px 10px',fontSize:'13px',cursor:'pointer',color:'#666'}}>✕ Clear</button>
+          <div style={{display:'flex',alignItems:'center',gap:'8px',marginTop:'8px',flexWrap:'wrap'}}>
+            <span style={{fontSize:'14px',color:'#555'}}>
+              Results for <strong style={{color:'#0A2E1F'}}>{searchQuery}</strong> near <strong style={{color:'#0A2E1F'}}>{locationName}</strong>
+            </span>
+            <button onClick={()=>{setSearchQuery('');setSearchInput('');window.history.replaceState({},'',(window.location.pathname));loadData(anchorLat,anchorLng,'')}} style={{background:'#f0f0f0',border:'none',borderRadius:'20px',padding:'3px 10px',fontSize:'13px',cursor:'pointer',color:'#666'}}>✕ Clear</button>
           </div>
         )}
       </div>
@@ -217,7 +287,9 @@ export default function FindPage() {
       <div style={{background:'white',padding:'10px 16px',borderBottom:'1px solid #f0f0f0'}}>
         <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'10px'}}>
           <span style={{fontSize:'14px',color:'#1D9E75'}}>📍</span>
-          <span style={{fontSize:'14px',color:'#555',fontWeight:'500'}}>{locating?'Finding your location...':locationName}</span>
+          <span style={{fontSize:'14px',color:'#555',fontWeight:'500'}}>
+            {locating ? 'Finding your location...' : `Near ${locationName}`}
+          </span>
           <button onClick={()=>getLocation((lat,lng)=>loadData(lat,lng,searchQuery))} style={{background:'none',border:'none',color:'#1D9E75',fontSize:'13px',cursor:'pointer',fontWeight:'600',marginLeft:'auto'}}>Update location</button>
         </div>
         <div style={{display:'flex',gap:'8px',overflowX:'auto',paddingBottom:'2px'}}>
@@ -231,7 +303,11 @@ export default function FindPage() {
       {successMsg&&<div style={{background:'#E1F5EE',borderBottom:'1px solid #9FE1CB',padding:'10px 20px'}}><p style={{fontSize:'14px',fontWeight:'700',color:'#1D9E75',margin:0}}>{successMsg}</p></div>}
 
       <div style={{padding:'16px 16px 100px'}}>
-        <p style={{fontSize:'14px',color:'#999',fontWeight:'500',margin:'0 0 12px'}}>{loading?'Loading...':`${filtered.length} location${filtered.length!==1?'s':''} found`}</p>
+        <p style={{fontSize:'14px',color:'#999',fontWeight:'500',margin:'0 0 12px'}}>
+          {loading
+            ? 'Loading...'
+            : `${filtered.length} location${filtered.length !== 1 ? 's' : ''} within ${RADIUS_MILES} mi of ${locationName}`}
+        </p>
 
         {loading&&<div style={{textAlign:'center',padding:'60px 20px'}}>
           <div style={{fontSize:'40px',marginBottom:'12px'}}>🚽</div>
@@ -317,7 +393,7 @@ export default function FindPage() {
       </div>
 
       {showPromo&&promoTarget&&(<PromoModal restroom={promoTarget} onComplete={()=>{setShowPromo(false);setShowPin(true)}}/>)}
-      {showRating&&ratingTarget&&(<RatingModal restroom={ratingTarget} user={user} onClose={()=>setShowRating(false)} onDone={()=>{setShowRating(false);setSuccessMsg('✅ Thank you!');setTimeout(()=>setSuccessMsg(''),3000);loadData(userLat??33.6846,userLng??-117.7892,searchQuery)}} initialPinWorked={ratingTarget?._pinWorked}/>)}
+      {showRating&&ratingTarget&&(<RatingModal restroom={ratingTarget} user={user} onClose={()=>setShowRating(false)} onDone={()=>{setShowRating(false);setSuccessMsg('✅ Thank you!');setTimeout(()=>setSuccessMsg(''),3000);loadData(anchorLat,anchorLng,searchQuery)}} initialPinWorked={ratingTarget?._pinWorked}/>)}
 
       {showEditForm&&editTarget&&(
         <div onClick={()=>setShowEditForm(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:50,display:'flex',alignItems:'flex-end'}}>
