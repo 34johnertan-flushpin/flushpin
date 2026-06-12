@@ -47,18 +47,19 @@ function bboxDeltas(lat: number, miles: number) {
 }
 
 const Logo = () => (
-  <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-    <div style={{width:'44px',height:'44px',background:'linear-gradient(135deg,#1D9E75,#0A5C42)',borderRadius:'12px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'4px',boxShadow:'0 2px 8px rgba(29,158,117,0.4)'}}>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'3px',width:'22px'}}>
-        {[1,1,1,1,1,1,0,1,0].map((v,i)=>(<div key={i} style={{width:'5px',height:'5px',borderRadius:'50%',background:v?'white':'rgba(255,255,255,0.2)'}}/>))}
+  <a href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px' }}>
+    <div style={{ width: '34px', height: '34px', background: '#1D9E75', borderRadius: '9px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px', flexShrink: 0 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '2px', width: '18px' }}>
+        {[1, 1, 1, 1, 1, 1, 0, 1, 0].map((v, i) => (
+          <div key={i} style={{ width: '4px', height: '4px', borderRadius: '50%', background: v ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.15)' }} />
+        ))}
       </div>
-      <div style={{width:0,height:0,borderLeft:'5px solid transparent',borderRight:'5px solid transparent',borderTop:'8px solid white',marginTop:'-1px'}}/>
+      <div style={{ width: 0, height: 0, borderLeft: '3px solid transparent', borderRight: '3px solid transparent', borderTop: '5px solid #1D9E75', marginTop: '-1px' }} />
     </div>
-    <div style={{display:'flex',flexDirection:'column',lineHeight:1}}>
-      <span style={{fontFamily:"'Space Grotesk','Inter',sans-serif",fontSize:'20px',fontWeight:'800',color:'#0A2E1F',letterSpacing:'-0.5px'}}>Flush<span style={{color:'#1D9E75'}}>Pin</span></span>
-      <span style={{fontSize:'10px',color:'#999',fontWeight:'500',letterSpacing:'0.5px'}}>FIND · RATE · FLUSH</span>
-    </div>
-  </div>
+    <span style={{ fontFamily: "'Space Grotesk','Inter',sans-serif", fontSize: '18px', fontWeight: '700', color: '#0A2E1F' }}>
+      Flush<span style={{ color: '#1D9E75' }}>Pin</span>
+    </span>
+  </a>
 )
 
 export default function FindPage() {
@@ -252,7 +253,7 @@ export default function FindPage() {
   return (
     <div style={{minHeight:'100vh',background:'#f8f9fa',fontFamily:"'Inter',system-ui,sans-serif"}}>
       <nav style={{background:'white',borderBottom:'1px solid #f0f0f0',padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:10}}>
-        <a href="/" style={{textDecoration:'none'}}><Logo/></a>
+        <Logo/>
         <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
           <div style={{display:'flex',background:'#f5f5f5',borderRadius:'8px',padding:'3px'}}>
             <button onClick={()=>setLang('en')} style={{padding:'5px 12px',borderRadius:'6px',border:'none',fontSize:'14px',cursor:'pointer',background:lang==='en'?'white':'transparent'}}>🇺🇸</button>
