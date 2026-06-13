@@ -73,7 +73,7 @@ export default function PrivacyPage() {
               <li>To log and attribute access code views, submissions, confirmations, and reports</li>
               <li>To process business claim, correction, opt-out, or removal requests</li>
               <li>To detect and prevent fraud, spam, false submissions, misuse, scraping, or platform abuse</li>
-              <li>To enforce our Terms of Service and Safety Notice</li>
+              <li>To enforce our <a href="/terms" style={link}>Terms of Service</a> and <a href="/safety" style={link}>Safety Notice</a></li>
               <li>To send you account-related emails, including confirmation, password reset, security, or service notices</li>
               <li>To comply with legal obligations and respond to lawful requests</li>
             </ul>
@@ -182,6 +182,7 @@ export default function PrivacyPage() {
         <div style={{ display: "flex", gap: "20px", justifyContent: "center", flexWrap: "wrap" }}>
           <a href="/privacy" style={{ color: "#5DCAA5", fontSize: "13px", textDecoration: "none" }}>Privacy Policy</a>
           <a href="/terms" style={{ color: "#5DCAA5", fontSize: "13px", textDecoration: "none" }}>Terms of Service</a>
+          <a href="/safety" style={{ color: "#5DCAA5", fontSize: "13px", textDecoration: "none" }}>Safety Notice</a>
           <a href="/contact" style={{ color: "#5DCAA5", fontSize: "13px", textDecoration: "none" }}>Contact</a>
         </div>
         <p style={{ color: "#2D6A4F", fontSize: "11px", marginTop: "12px" }}>© 2026 FlushPin. All rights reserved.</p>
