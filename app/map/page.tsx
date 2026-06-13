@@ -77,6 +77,7 @@ export default function FindPage() {
   const [locating, setLocating] = useState(false)
   const [showEditForm, setShowEditForm] = useState(false)
   const [editTarget, setEditTarget] = useState<any>(null)
+  const [editMode, setEditMode] = useState<'update'|'correct'|'share'>('update')
   const [editEntry, setEditEntry] = useState<{pin:string;accessible:boolean;accessType:AccessType}>({pin:'',accessible:false,accessType:'keypad_code'})
   const [savingEdit, setSavingEdit] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
@@ -236,22 +237,43 @@ export default function FindPage() {
     }
   }
 
-  const handleEditOpen = (r:any,e:React.MouseEvent) => {
+  const localizedChips = ACCESS_TYPE_CHIPS.map(chip => ({
+    ...chip,
+    label:
+      chip.id === 'keypad_code' ? t.chipKeypad
+      : chip.id === 'no_code_needed' ? t.chipOpen
+      : chip.id === 'ask_staff' ? t.chipAskStaff
+      : chip.id === 'customers_only' ? t.chipCustomers
+      : t.chipLocked,
+  }))
+
+  const handleEditOpen = (r: any, e: React.MouseEvent, mode: 'update' | 'correct' | 'share' = 'update') => {
     e.stopPropagation()
     const { accessType, displayPin } = resolveRestroomAccess(r)
     setEditTarget(r)
+    setEditMode(mode)
     setEditEntry({
-      pin: displayPin || '',
+      pin: mode === 'correct' ? '' : (displayPin || ''),
       accessible: r.accessible || false,
-      accessType: accessType === 'unknown' ? 'keypad_code' : accessType,
+      accessType: mode === 'share' || accessType === 'unknown' ? 'keypad_code' : accessType,
     })
     setShowEditForm(true)
+  }
+
+  const handleAccessAction = (r: any, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (restroomHasAccessInfo(r)) {
+      setPromoTarget(r)
+      setShowPromo(true)
+    } else {
+      handleEditOpen(r, e, 'share')
+    }
   }
 
   const handleEditSave = async () => {
     if (!editTarget || savingEdit) return
     if (editEntry.accessType === 'keypad_code' && !editEntry.pin.trim()) {
-      setSuccessMsg('❌ Enter the access code or pick another access type')
+      setSuccessMsg(t.enterPinError)
       setTimeout(() => setSuccessMsg(''), 4000)
       return
     }
@@ -269,7 +291,7 @@ export default function FindPage() {
         .single()
       if (error) {
         setSavingEdit(false)
-        setSuccessMsg('❌ Could not save — try again')
+        setSuccessMsg(t.saveError)
         setTimeout(() => setSuccessMsg(''), 4000)
         return
       }
@@ -292,7 +314,7 @@ export default function FindPage() {
         .single()
       if (error) {
         setSavingEdit(false)
-        setSuccessMsg('❌ Could not save — try again')
+        setSuccessMsg(t.saveError)
         setTimeout(() => setSuccessMsg(''), 4000)
         return
       }
@@ -312,19 +334,19 @@ export default function FindPage() {
     setEditTarget(null)
     setSavingEdit(false)
     const badge = getAccessListLabel(updated)
-    setSuccessMsg(`✅ Live now — ${badge.label} · ${formatUpdatedAt(payload.pin_updated_at)}`)
+    setSuccessMsg(`${t.liveNow} — ${badge.label} · ${formatUpdatedAt(payload.pin_updated_at)}`)
     setTimeout(() => setSuccessMsg(''), 5000)
   }
 
   const renderAccessPanel = (r: any) => {
     const { accessType, displayPin } = resolveRestroomAccess(r)
     const updatedAt = r.pin_updated_at ? formatUpdatedAt(r.pin_updated_at) : null
-    const updatedLine = updatedAt ? `Updated ${updatedAt}` : (r.verified || null)
+    const updatedLine = updatedAt ? `${t.updated} ${updatedAt}` : (r.verified || null)
 
     if (accessType === 'keypad_code' && displayPin) {
       return (
         <div style={{background:'#E1F5EE',borderRadius:'10px',padding:'16px',textAlign:'center',marginBottom:'10px'}}>
-          <p style={{fontSize:'12px',color:'#0F6E56',fontWeight:'600',margin:'0 0 4px',letterSpacing:'1px'}}>CUSTOMER ACCESS CODE</p>
+          <p style={{fontSize:'12px',color:'#0F6E56',fontWeight:'600',margin:'0 0 4px',letterSpacing:'1px'}}>{t.customerCode}</p>
           <p style={{fontSize:'42px',fontWeight:'700',color:'#085041',letterSpacing:'10px',margin:'10px 0'}}>{displayPin}</p>
           {updatedLine&&<p style={{fontSize:'12px',color:'#888',margin:0}}>{updatedLine}</p>}
         </div>
@@ -333,8 +355,8 @@ export default function FindPage() {
     if (accessType === 'no_code_needed') {
       return (
         <div style={{background:'#D1FAE5',borderRadius:'10px',padding:'14px',textAlign:'center',marginBottom:'10px'}}>
-          <p style={{fontSize:'17px',fontWeight:'700',color:'#065F46',margin:0}}>🚪 Open access restroom</p>
-          <p style={{fontSize:'13px',color:'#047857',margin:'4px 0 0'}}>No code required</p>
+          <p style={{fontSize:'17px',fontWeight:'700',color:'#065F46',margin:0}}>🚪 {t.openAccess}</p>
+          <p style={{fontSize:'13px',color:'#047857',margin:'4px 0 0'}}>{t.openDesc}</p>
           {updatedLine&&<p style={{fontSize:'12px',color:'#888',margin:'8px 0 0'}}>{updatedLine}</p>}
         </div>
       )
@@ -342,8 +364,8 @@ export default function FindPage() {
     if (accessType === 'customers_only') {
       return (
         <div style={{background:'#EEF2FF',borderRadius:'10px',padding:'14px',textAlign:'center',marginBottom:'10px'}}>
-          <p style={{fontSize:'17px',fontWeight:'700',color:'#4338CA',margin:0}}>🧾 Customers only</p>
-          <p style={{fontSize:'13px',color:'#6366F1',margin:'4px 0 0'}}>Purchase may be required — ask staff if unsure</p>
+          <p style={{fontSize:'17px',fontWeight:'700',color:'#4338CA',margin:0}}>{t.customersOnly}</p>
+          <p style={{fontSize:'13px',color:'#6366F1',margin:'4px 0 0'}}>{t.customersOnlyDesc}</p>
           {updatedLine&&<p style={{fontSize:'12px',color:'#888',margin:'8px 0 0'}}>{updatedLine}</p>}
         </div>
       )
@@ -351,8 +373,8 @@ export default function FindPage() {
     if (accessType === 'ask_staff') {
       return (
         <div style={{background:'#FEF3C7',borderRadius:'10px',padding:'14px',textAlign:'center',marginBottom:'10px'}}>
-          <p style={{fontSize:'17px',fontWeight:'700',color:'#92400E',margin:0}}>🔑 Ask staff for access</p>
-          <p style={{fontSize:'13px',color:'#B45309',margin:'4px 0 0'}}>Key or code available at the counter</p>
+          <p style={{fontSize:'17px',fontWeight:'700',color:'#92400E',margin:0}}>{t.askStaff}</p>
+          <p style={{fontSize:'13px',color:'#B45309',margin:'4px 0 0'}}>{t.askStaffDesc}</p>
           {updatedLine&&<p style={{fontSize:'12px',color:'#888',margin:'8px 0 0'}}>{updatedLine}</p>}
         </div>
       )
@@ -360,19 +382,42 @@ export default function FindPage() {
     if (accessType === 'locked') {
       return (
         <div style={{background:'#FEE2E2',borderRadius:'10px',padding:'14px',textAlign:'center',marginBottom:'10px'}}>
-          <p style={{fontSize:'17px',fontWeight:'700',color:'#991B1B',margin:0}}>🚫 Restroom locked</p>
-          <p style={{fontSize:'13px',color:'#DC2626',margin:'4px 0 0'}}>Not publicly available right now</p>
+          <p style={{fontSize:'17px',fontWeight:'700',color:'#991B1B',margin:0}}>{t.locked}</p>
+          <p style={{fontSize:'13px',color:'#DC2626',margin:'4px 0 0'}}>{t.lockedDesc}</p>
           {updatedLine&&<p style={{fontSize:'12px',color:'#888',margin:'8px 0 0'}}>{updatedLine}</p>}
         </div>
       )
     }
     return (
       <div style={{background:'#FEE2E2',borderRadius:'10px',padding:'14px',textAlign:'center',marginBottom:'10px'}}>
-        <p style={{fontSize:'15px',fontWeight:'700',color:'#DC2626',margin:0}}>Access information unknown</p>
-        <p style={{fontSize:'13px',color:'#888',margin:'4px 0 0'}}>Be the first to share how access works here</p>
+        <p style={{fontSize:'15px',fontWeight:'700',color:'#DC2626',margin:0}}>{t.unknownAccess}</p>
+        <p style={{fontSize:'13px',color:'#888',margin:'4px 0 0'}}>{t.unknownDesc}</p>
+        <button onClick={e=>handleEditOpen(r,e,'share')} style={{marginTop:'12px',background:'#1D9E75',color:'white',border:'none',padding:'10px 16px',borderRadius:'8px',fontSize:'14px',fontWeight:'700',cursor:'pointer'}}>{t.shareAccess}</button>
       </div>
     )
   }
+
+  const renderAccessActions = (r: any) => {
+    const resolved = resolveRestroomAccess(r)
+    const hasPin = resolved.accessType === 'keypad_code' && !!resolved.displayPin
+    const hasInfo = restroomHasAccessInfo(r)
+
+    return (
+      <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+        {hasPin && (
+          <button onClick={e=>{e.stopPropagation();setRatingTarget({...r,_pinWorked:true});setShowRating(true)}} style={{flex:1,minWidth:'100px',background:'#f0faf6',color:'#1D9E75',border:'1px solid #9FE1CB',padding:'10px',borderRadius:'8px',fontSize:'13px',fontWeight:'600',cursor:'pointer'}}>{t.codeWorked}</button>
+        )}
+        {(hasPin || hasInfo) && (
+          <button onClick={e=>handleEditOpen(r,e,'correct')} style={{flex:1,minWidth:'100px',background:'#FEE2E2',color:'#DC2626',border:'1px solid #FCA5A5',padding:'10px',borderRadius:'8px',fontSize:'13px',fontWeight:'600',cursor:'pointer'}}>{hasPin ? t.codeChanged : t.wrongInfo}</button>
+        )}
+        <button onClick={e=>handleEditOpen(r,e,'update')} style={{flex:1,minWidth:'100px',background:'#FEF3C7',color:'#D97706',border:'1px solid #FCD34D',padding:'10px',borderRadius:'8px',fontSize:'13px',fontWeight:'600',cursor:'pointer'}}>{t.update}</button>
+      </div>
+    )
+  }
+
+  const editFormTitle = editTarget
+    ? `${editMode === 'correct' ? t.correctAccessTitle : editMode === 'share' ? t.shareAccessTitle : t.updateAccessTitle}: ${editTarget.name}`
+    : ''
 
   const inputStyle = {width:'100%',padding:'12px 14px',borderRadius:'8px',border:'1px solid #e0e0e0',fontSize:'16px',boxSizing:'border-box' as const,outline:'none',fontFamily:"'Inter',system-ui,sans-serif",color:'#1a1a1a'}
   const labelStyle = {fontSize:'14px',fontWeight:'600' as const,color:'#555',marginBottom:'6px',display:'block' as const}
@@ -483,7 +528,7 @@ export default function FindPage() {
                 <div style={{textAlign:'right',flexShrink:0,marginLeft:'12px',display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'6px'}}>
                   <p style={{fontSize:'15px',fontWeight:'700',color:'#0A2E1F',margin:'0 0 2px'}}>{formatDist(r.distance)}</p>
                   <p style={{fontSize:'12px',color:'#bbb',margin:0}}>away</p>
-                  <button onClick={e=>handleEditOpen(r,e)} style={{background:'#f5f5f5',border:'none',borderRadius:'6px',padding:'5px 9px',fontSize:'12px',fontWeight:'600',color:'#555',cursor:'pointer'}}>✏️ Edit</button>
+                  <button onClick={e=>handleEditOpen(r,e,'update')} style={{background:'#f5f5f5',border:'none',borderRadius:'6px',padding:'5px 9px',fontSize:'12px',fontWeight:'600',color:'#555',cursor:'pointer'}}>{t.edit}</button>
                 </div>
               </div>
             </div>
@@ -495,25 +540,15 @@ export default function FindPage() {
                     {r.opt_out?(
                       <div style={{flex:1,background:'#FEE2E2',borderRadius:'9px',padding:'12px',textAlign:'center',fontSize:'14px',color:'#DC2626',fontWeight:'600'}}>🚫 This business has opted out of FlushPin</div>
                     ):(<>
-                      <button onClick={e=>{e.stopPropagation();setPromoTarget(r);setShowPromo(true)}} style={{flex:1,background:'#1D9E75',color:'white',border:'none',padding:'12px',borderRadius:'9px',fontSize:'15px',fontWeight:'700',cursor:'pointer'}}>{restroomHasAccessInfo(r)?'View access info':'Share access info'}</button>
-                      <button onClick={e=>{e.stopPropagation();setRatingTarget({...r,_pinWorked:undefined});setShowRating(true)}} style={{flex:1,background:'#F59E0B',color:'white',border:'none',padding:'12px',borderRadius:'9px',fontSize:'15px',fontWeight:'700',cursor:'pointer'}}>⭐ Rate</button>
-                      <button onClick={e=>{e.stopPropagation();openDirections(r)}} style={{flex:1,background:'#0A2E1F',color:'white',border:'none',padding:'12px',borderRadius:'9px',fontSize:'15px',fontWeight:'700',cursor:'pointer'}}>Go →</button>
+                      <button onClick={e=>handleAccessAction(r,e)} style={{flex:1,background:'#1D9E75',color:'white',border:'none',padding:'12px',borderRadius:'9px',fontSize:'15px',fontWeight:'700',cursor:'pointer'}}>{restroomHasAccessInfo(r)?t.viewAccess:t.shareAccess}</button>
+                      <button onClick={e=>{e.stopPropagation();setRatingTarget({...r,_pinWorked:undefined});setShowRating(true)}} style={{flex:1,background:'#F59E0B',color:'white',border:'none',padding:'12px',borderRadius:'9px',fontSize:'15px',fontWeight:'700',cursor:'pointer'}}>{t.rate}</button>
+                      <button onClick={e=>{e.stopPropagation();openDirections(r)}} style={{flex:1,background:'#0A2E1F',color:'white',border:'none',padding:'12px',borderRadius:'9px',fontSize:'15px',fontWeight:'700',cursor:'pointer'}}>{t.go}</button>
                     </>)}
                   </div>
                 ):(
                   <div onClick={e=>e.stopPropagation()}>
                     {renderAccessPanel(r)}
-                    <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
-                      {(() => {
-                        const resolved = resolveRestroomAccess(r)
-                        if (resolved.accessType !== 'keypad_code' || !resolved.displayPin) return null
-                        return (<>
-                          <button onClick={e=>{e.stopPropagation();setRatingTarget({...r,_pinWorked:true});setShowRating(true)}} style={{flex:1,minWidth:'100px',background:'#f0faf6',color:'#1D9E75',border:'1px solid #9FE1CB',padding:'10px',borderRadius:'8px',fontSize:'13px',fontWeight:'600',cursor:'pointer'}}>Code worked ✅</button>
-                          <button onClick={e=>{e.stopPropagation();setRatingTarget({...r,_pinWorked:false});setShowRating(true)}} style={{flex:1,minWidth:'100px',background:'#FEE2E2',color:'#DC2626',border:'1px solid #FCA5A5',padding:'10px',borderRadius:'8px',fontSize:'13px',fontWeight:'600',cursor:'pointer'}}>Code changed ❌</button>
-                        </>)
-                      })()}
-                      <button onClick={e=>handleEditOpen(r,e)} style={{flex:1,minWidth:'100px',background:'#FEF3C7',color:'#D97706',border:'1px solid #FCD34D',padding:'10px',borderRadius:'8px',fontSize:'13px',fontWeight:'600',cursor:'pointer'}}>Update 🔄</button>
-                    </div>
+                    {renderAccessActions(r)}
                   </div>
                 )}
               </div>
@@ -529,27 +564,32 @@ export default function FindPage() {
         <div onClick={()=>setShowEditForm(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:50,display:'flex',alignItems:'flex-end'}}>
           <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:'20px 20px 0 0',padding:'24px 20px',width:'100%',maxHeight:'85vh',overflowY:'auto'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
-              <h2 style={{margin:0,fontSize:'19px',fontWeight:'700',color:'#0A2E1F'}}>Update: {editTarget.name}</h2>
+              <h2 style={{margin:0,fontSize:'19px',fontWeight:'700',color:'#0A2E1F'}}>{editFormTitle}</h2>
               <button onClick={()=>setShowEditForm(false)} style={{background:'none',border:'none',fontSize:'26px',cursor:'pointer',color:'#999'}}>✕</button>
             </div>
             <div style={{display:'flex',flexDirection:'column',gap:'14px'}}>
+              {editMode === 'correct' && (
+                <p style={{fontSize:'14px',color:'#DC2626',margin:0,fontWeight:'600',lineHeight:1.5}}>{t.correctAccessDesc}</p>
+              )}
               <div>
-                <label style={labelStyle}>How does access work?</label>
+                <label style={labelStyle}>{t.howDoesAccess}</label>
                 <div style={{display:'flex',flexWrap:'wrap',gap:'8px',marginTop:'8px'}}>
-                  {ACCESS_TYPE_CHIPS.map(chip=>(
+                  {localizedChips.map(chip=>(
                     <button key={chip.id} type="button" onClick={()=>setEditEntry(p=>({...p,accessType:chip.id,pin:chip.id==='keypad_code'?p.pin:''}))} style={{background:editEntry.accessType===chip.id?'#E1F5EE':'#f5f5f5',color:editEntry.accessType===chip.id?'#085041':'#555',border:editEntry.accessType===chip.id?'2px solid #1D9E75':'2px solid transparent',padding:'10px 12px',borderRadius:'10px',fontSize:'13px',fontWeight:'600',cursor:'pointer'}}>{chip.emoji} {chip.label}</button>
                   ))}
                 </div>
               </div>
               {editEntry.accessType==='keypad_code'&&(
-                <div><label style={labelStyle}>Access code (PIN)</label><input style={inputStyle} placeholder="e.g. 1234" value={editEntry.pin} onChange={e=>setEditEntry(p=>({...p,pin:e.target.value}))}/></div>
+                <div><label style={labelStyle}>{t.accessPinLabel}</label><input style={inputStyle} placeholder={t.accessPinPlaceholder} value={editEntry.pin} onChange={e=>setEditEntry(p=>({...p,pin:e.target.value}))}/></div>
               )}
-              <p style={{fontSize:'13px',color:'#888',margin:0,lineHeight:1.5}}>Your update goes live immediately for everyone nearby — with today&apos;s date and time. No approval wait.</p>
+              {editMode !== 'correct' && (
+                <p style={{fontSize:'13px',color:'#888',margin:0,lineHeight:1.5}}>{t.correctAccessDesc}</p>
+              )}
               <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
                 <input type="checkbox" id="acc-edit" checked={editEntry.accessible} onChange={e=>setEditEntry(p=>({...p,accessible:e.target.checked}))} style={{width:'18px',height:'18px',cursor:'pointer'}}/>
-                <label htmlFor="acc-edit" style={{fontSize:'15px',color:'#555',cursor:'pointer'}}>♿ Wheelchair accessible</label>
+                <label htmlFor="acc-edit" style={{fontSize:'15px',color:'#555',cursor:'pointer'}}>{t.wheelchair}</label>
               </div>
-              <button onClick={handleEditSave} disabled={savingEdit} style={{background:savingEdit?'#9CA3AF':'#1D9E75',color:'white',border:'none',padding:'16px',borderRadius:'10px',fontSize:'16px',fontWeight:'700',cursor:savingEdit?'wait':'pointer'}}>{savingEdit?'Publishing...':'Publish now ✓'}</button>
+              <button onClick={handleEditSave} disabled={savingEdit} style={{background:savingEdit?'#9CA3AF':'#1D9E75',color:'white',border:'none',padding:'16px',borderRadius:'10px',fontSize:'16px',fontWeight:'700',cursor:savingEdit?'wait':'pointer'}}>{savingEdit?t.publishing:t.publishNow}</button>
             </div>
           </div>
         </div>

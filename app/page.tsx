@@ -192,18 +192,18 @@ export default function Home() {
           <a href="/business" style={{background:"white",color:"#0A2E1F",padding:"15px 34px",borderRadius:"11px",textDecoration:"none",fontSize:"17px",border:"1.5px solid #e0e0e0",fontWeight:"600"}}>{t.businessBtn}</a>
         </div>
 
-        <a
-          href={APP_STORE_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{display:"inline-flex",alignItems:"center",gap:"10px",background:"#0A2E1F",color:"white",padding:"12px 22px",borderRadius:"11px",textDecoration:"none",fontSize:"15px",fontWeight:"700"}}
-        >
-          <span style={{fontSize:"22px",lineHeight:1}}></span>
-          <span style={{display:"flex",flexDirection:"column",alignItems:"flex-start",lineHeight:1.2}}>
-            <span style={{fontSize:"10px",fontWeight:"500",opacity:0.85}}>{t.downloadIosSub}</span>
-            <span>{t.downloadIos}</span>
-          </span>
-        </a>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"6px"}}>
+          <a href={APP_STORE_URL} target="_blank" rel="noopener noreferrer" style={{lineHeight:0}}>
+            <img
+              src="/apple.png"
+              alt={t.downloadIos}
+              width={600}
+              height={600}
+              style={{width:"156px",height:"auto",display:"block"}}
+            />
+          </a>
+          <span style={{fontSize:"11px",color:"#999",letterSpacing:"0.02em"}}>{t.appStoreComingSoon}</span>
+        </div>
       </section>
 
       <section style={{padding:"0 20px 56px",maxWidth:"920px",margin:"0 auto"}}>
