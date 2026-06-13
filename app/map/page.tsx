@@ -6,14 +6,16 @@ import Logo from '../../components/Logo'
 import PromoModal from '../../components/PromoModal'
 import { useLang } from '../../lib/LanguageContext'
 import {
-  ACCESS_TYPE_CHIPS,
-  buildVerifiedLabel,
+  ACCESS_METHOD_CHIPS,
+  buildAccessPayload,
   formatUpdatedAt,
   getAccessListLabel,
   hasDbRestroomId,
-  resolveRestroomAccess,
+  parseAccessEditState,
+  parseAccessRecord,
   restroomHasAccessInfo,
-  type AccessType,
+  type AccessEditState,
+  type AccessMethod,
 } from '../../lib/accessType'
 
 function getDistance(lat1:number, lng1:number, lat2:number, lng2:number) {
@@ -78,7 +80,7 @@ export default function FindPage() {
   const [showEditForm, setShowEditForm] = useState(false)
   const [editTarget, setEditTarget] = useState<any>(null)
   const [editMode, setEditMode] = useState<'update'|'correct'|'share'>('update')
-  const [editEntry, setEditEntry] = useState<{pin:string;accessible:boolean;accessType:AccessType}>({pin:'',accessible:false,accessType:'keypad_code'})
+  const [editEntry, setEditEntry] = useState<AccessEditState>({pin:'',accessible:false,customersOnly:false,method:'no_code_needed'})
   const [savingEdit, setSavingEdit] = useState(false)
   const [editError, setEditError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
@@ -218,35 +220,30 @@ export default function FindPage() {
   const statusLabel = (s:string) => s==='green'?'Community verified':s==='amber'?'Needs update':'Access info unknown'
   const openDirections = (r:any) => window.open(`https://www.google.com/maps/dir/?api=1&destination=${r.lat},${r.lng}&travelmode=driving`,'_blank')
 
-  const buildAccessPayload = (entry: typeof editEntry) => {
-    const now = new Date().toISOString()
-    const accessType = entry.accessType
-    let pin: string | null = null
-    if (accessType === 'keypad_code') {
-      pin = entry.pin.trim() || null
-    } else if (accessType === 'no_code_needed') {
-      pin = 'open'
-    }
-    const hasInfo = accessType !== 'unknown' && (accessType !== 'keypad_code' || !!pin)
-    return {
-      access_type: accessType,
-      pin,
-      accessible: entry.accessible,
-      status: hasInfo ? 'green' : 'red',
-      verified: buildVerifiedLabel(accessType, now),
-      pin_updated_at: now,
-    }
-  }
-
-  const localizedChips = ACCESS_TYPE_CHIPS.map(chip => ({
+  const localizedMethodChips = ACCESS_METHOD_CHIPS.map(chip => ({
     ...chip,
     label:
       chip.id === 'keypad_code' ? t.chipKeypad
       : chip.id === 'no_code_needed' ? t.chipOpen
       : chip.id === 'ask_staff' ? t.chipAskStaff
-      : chip.id === 'customers_only' ? t.chipCustomers
       : t.chipLocked,
   }))
+
+  const selectAccessMethod = (method: AccessMethod) => {
+    setEditEntry(p => ({
+      ...p,
+      method,
+      customersOnly: method === 'locked' ? false : p.customersOnly,
+      pin: method === 'keypad_code' ? p.pin : '',
+    }))
+  }
+
+  const toggleCustomersOnly = () => {
+    setEditEntry(p => ({
+      ...p,
+      customersOnly: p.method === 'locked' ? false : !p.customersOnly,
+    }))
+  }
 
   const closeEditForm = () => {
     setShowEditForm(false)
@@ -319,14 +316,14 @@ export default function FindPage() {
 
   const handleEditOpen = (r: any, e: React.MouseEvent, mode: 'update' | 'correct' | 'share' = 'update') => {
     e.stopPropagation()
-    const { accessType, displayPin } = resolveRestroomAccess(r)
+    const parsed = parseAccessEditState(r)
     setEditTarget(r)
     setEditMode(mode)
     setEditError('')
     setEditEntry({
-      pin: mode === 'correct' ? '' : (displayPin || ''),
-      accessible: r.accessible || false,
-      accessType: mode === 'share' || accessType === 'unknown' ? 'keypad_code' : accessType,
+      ...parsed,
+      pin: mode === 'correct' ? '' : parsed.pin,
+      method: mode === 'share' && parsed.method === 'no_code_needed' ? 'no_code_needed' : parsed.method,
     })
     setShowEditForm(true)
   }
@@ -343,7 +340,7 @@ export default function FindPage() {
 
   const handleEditSave = async () => {
     if (!editTarget || savingEdit) return
-    if (editEntry.accessType === 'keypad_code' && !editEntry.pin.trim()) {
+    if (editEntry.method === 'keypad_code' && !editEntry.pin.trim()) {
       setEditError(t.enterPinError)
       return
     }
@@ -379,47 +376,21 @@ export default function FindPage() {
   }
 
   const renderAccessPanel = (r: any) => {
-    const { accessType, displayPin } = resolveRestroomAccess(r)
+    const parsed = parseAccessRecord(r)
     const updatedAt = r.pin_updated_at ? formatUpdatedAt(r.pin_updated_at) : null
     const updatedLine = updatedAt ? `${t.updated} ${updatedAt}` : (r.verified || null)
 
-    if (accessType === 'keypad_code' && displayPin) {
+    if (parsed.method === 'unknown') {
       return (
-        <div style={{background:'#E1F5EE',borderRadius:'10px',padding:'16px',textAlign:'center',marginBottom:'10px'}}>
-          <p style={{fontSize:'12px',color:'#0F6E56',fontWeight:'600',margin:'0 0 4px',letterSpacing:'1px'}}>{t.customerCode}</p>
-          <p style={{fontSize:'42px',fontWeight:'700',color:'#085041',letterSpacing:'10px',margin:'10px 0'}}>{displayPin}</p>
-          {updatedLine&&<p style={{fontSize:'12px',color:'#888',margin:0}}>{updatedLine}</p>}
+        <div style={{background:'#FEE2E2',borderRadius:'10px',padding:'14px',textAlign:'center',marginBottom:'10px'}}>
+          <p style={{fontSize:'15px',fontWeight:'700',color:'#DC2626',margin:0}}>{t.unknownAccess}</p>
+          <p style={{fontSize:'13px',color:'#888',margin:'4px 0 0'}}>{t.unknownDesc}</p>
+          <button onClick={e=>handleEditOpen(r,e,'share')} style={{marginTop:'12px',background:'#1D9E75',color:'white',border:'none',padding:'10px 16px',borderRadius:'8px',fontSize:'14px',fontWeight:'700',cursor:'pointer'}}>{t.shareAccess}</button>
         </div>
       )
     }
-    if (accessType === 'no_code_needed') {
-      return (
-        <div style={{background:'#D1FAE5',borderRadius:'10px',padding:'14px',textAlign:'center',marginBottom:'10px'}}>
-          <p style={{fontSize:'17px',fontWeight:'700',color:'#065F46',margin:0}}>🚪 {t.openAccess}</p>
-          <p style={{fontSize:'13px',color:'#047857',margin:'4px 0 0'}}>{t.openDesc}</p>
-          {updatedLine&&<p style={{fontSize:'12px',color:'#888',margin:'8px 0 0'}}>{updatedLine}</p>}
-        </div>
-      )
-    }
-    if (accessType === 'customers_only') {
-      return (
-        <div style={{background:'#EEF2FF',borderRadius:'10px',padding:'14px',textAlign:'center',marginBottom:'10px'}}>
-          <p style={{fontSize:'17px',fontWeight:'700',color:'#4338CA',margin:0}}>{t.customersOnly}</p>
-          <p style={{fontSize:'13px',color:'#6366F1',margin:'4px 0 0'}}>{t.customersOnlyDesc}</p>
-          {updatedLine&&<p style={{fontSize:'12px',color:'#888',margin:'8px 0 0'}}>{updatedLine}</p>}
-        </div>
-      )
-    }
-    if (accessType === 'ask_staff') {
-      return (
-        <div style={{background:'#FEF3C7',borderRadius:'10px',padding:'14px',textAlign:'center',marginBottom:'10px'}}>
-          <p style={{fontSize:'17px',fontWeight:'700',color:'#92400E',margin:0}}>{t.askStaff}</p>
-          <p style={{fontSize:'13px',color:'#B45309',margin:'4px 0 0'}}>{t.askStaffDesc}</p>
-          {updatedLine&&<p style={{fontSize:'12px',color:'#888',margin:'8px 0 0'}}>{updatedLine}</p>}
-        </div>
-      )
-    }
-    if (accessType === 'locked') {
+
+    if (parsed.method === 'locked') {
       return (
         <div style={{background:'#FEE2E2',borderRadius:'10px',padding:'14px',textAlign:'center',marginBottom:'10px'}}>
           <p style={{fontSize:'17px',fontWeight:'700',color:'#991B1B',margin:0}}>{t.locked}</p>
@@ -428,18 +399,47 @@ export default function FindPage() {
         </div>
       )
     }
+
     return (
-      <div style={{background:'#FEE2E2',borderRadius:'10px',padding:'14px',textAlign:'center',marginBottom:'10px'}}>
-        <p style={{fontSize:'15px',fontWeight:'700',color:'#DC2626',margin:0}}>{t.unknownAccess}</p>
-        <p style={{fontSize:'13px',color:'#888',margin:'4px 0 0'}}>{t.unknownDesc}</p>
-        <button onClick={e=>handleEditOpen(r,e,'share')} style={{marginTop:'12px',background:'#1D9E75',color:'white',border:'none',padding:'10px 16px',borderRadius:'8px',fontSize:'14px',fontWeight:'700',cursor:'pointer'}}>{t.shareAccess}</button>
+      <div style={{display:'flex',flexDirection:'column',gap:'8px',marginBottom:'10px'}}>
+        {parsed.customersOnly && (
+          <div style={{background:'#EEF2FF',borderRadius:'10px',padding:'12px 14px',textAlign:'center'}}>
+            <p style={{fontSize:'16px',fontWeight:'700',color:'#4338CA',margin:0}}>{t.customersOnly}</p>
+            <p style={{fontSize:'13px',color:'#6366F1',margin:'4px 0 0'}}>{t.customersOnlyDesc}</p>
+          </div>
+        )}
+        {parsed.method === 'keypad_code' && parsed.displayPin && (
+          <div style={{background:'#E1F5EE',borderRadius:'10px',padding:'16px',textAlign:'center'}}>
+            <p style={{fontSize:'12px',color:'#0F6E56',fontWeight:'600',margin:'0 0 4px',letterSpacing:'1px'}}>{t.customerCode}</p>
+            <p style={{fontSize:'42px',fontWeight:'700',color:'#085041',letterSpacing:'10px',margin:'10px 0'}}>{parsed.displayPin}</p>
+          </div>
+        )}
+        {parsed.method === 'no_code_needed' && (
+          <div style={{background:'#D1FAE5',borderRadius:'10px',padding:'14px',textAlign:'center'}}>
+            <p style={{fontSize:'17px',fontWeight:'700',color:'#065F46',margin:0}}>🚪 {t.openAccess}</p>
+            <p style={{fontSize:'13px',color:'#047857',margin:'4px 0 0'}}>{t.openDesc}</p>
+          </div>
+        )}
+        {parsed.method === 'ask_staff' && (
+          <div style={{background:'#FEF3C7',borderRadius:'10px',padding:'14px',textAlign:'center'}}>
+            <p style={{fontSize:'17px',fontWeight:'700',color:'#92400E',margin:0}}>{t.askStaff}</p>
+            <p style={{fontSize:'13px',color:'#B45309',margin:'4px 0 0'}}>{t.askStaffDesc}</p>
+          </div>
+        )}
+        {parsed.method === 'keypad_code' && !parsed.displayPin && (
+          <div style={{background:'#FEE2E2',borderRadius:'10px',padding:'14px',textAlign:'center'}}>
+            <p style={{fontSize:'15px',fontWeight:'700',color:'#DC2626',margin:0}}>{t.unknownAccess}</p>
+            <p style={{fontSize:'13px',color:'#888',margin:'4px 0 0'}}>{t.unknownDesc}</p>
+          </div>
+        )}
+        {updatedLine&&<p style={{fontSize:'12px',color:'#888',margin:0,textAlign:'center'}}>{updatedLine}</p>}
       </div>
     )
   }
 
   const renderAccessActions = (r: any) => {
-    const resolved = resolveRestroomAccess(r)
-    const hasPin = resolved.accessType === 'keypad_code' && !!resolved.displayPin
+    const parsed = parseAccessRecord(r)
+    const hasPin = parsed.method === 'keypad_code' && !!parsed.displayPin
     const hasInfo = restroomHasAccessInfo(r)
 
     return (
@@ -612,14 +612,37 @@ export default function FindPage() {
                 <p style={{fontSize:'14px',color:'#DC2626',margin:0,fontWeight:'600',lineHeight:1.5}}>{t.correctAccessDesc}</p>
               )}
               <div>
+                <label style={labelStyle}>{t.whoCanUse}</label>
+                <div style={{display:'flex',flexWrap:'wrap',gap:'8px',marginTop:'8px'}}>
+                  <button
+                    type="button"
+                    onClick={toggleCustomersOnly}
+                    disabled={editEntry.method === 'locked'}
+                    style={{
+                      background: editEntry.customersOnly ? '#EEF2FF' : '#f5f5f5',
+                      color: editEntry.customersOnly ? '#4338CA' : '#555',
+                      border: editEntry.customersOnly ? '2px solid #6366F1' : '2px solid transparent',
+                      padding:'10px 12px',
+                      borderRadius:'10px',
+                      fontSize:'13px',
+                      fontWeight:'600',
+                      cursor: editEntry.method === 'locked' ? 'not-allowed' : 'pointer',
+                      opacity: editEntry.method === 'locked' ? 0.45 : 1,
+                    }}
+                  >
+                    🧾 {t.chipCustomers}
+                  </button>
+                </div>
+              </div>
+              <div>
                 <label style={labelStyle}>{t.howDoesAccess}</label>
                 <div style={{display:'flex',flexWrap:'wrap',gap:'8px',marginTop:'8px'}}>
-                  {localizedChips.map(chip=>(
-                    <button key={chip.id} type="button" onClick={()=>setEditEntry(p=>({...p,accessType:chip.id,pin:chip.id==='keypad_code'?p.pin:''}))} style={{background:editEntry.accessType===chip.id?'#E1F5EE':'#f5f5f5',color:editEntry.accessType===chip.id?'#085041':'#555',border:editEntry.accessType===chip.id?'2px solid #1D9E75':'2px solid transparent',padding:'10px 12px',borderRadius:'10px',fontSize:'13px',fontWeight:'600',cursor:'pointer'}}>{chip.emoji} {chip.label}</button>
+                  {localizedMethodChips.map(chip=>(
+                    <button key={chip.id} type="button" onClick={()=>selectAccessMethod(chip.id)} style={{background:editEntry.method===chip.id?'#E1F5EE':'#f5f5f5',color:editEntry.method===chip.id?'#085041':'#555',border:editEntry.method===chip.id?'2px solid #1D9E75':'2px solid transparent',padding:'10px 12px',borderRadius:'10px',fontSize:'13px',fontWeight:'600',cursor:'pointer'}}>{chip.emoji} {chip.label}</button>
                   ))}
                 </div>
               </div>
-              {editEntry.accessType==='keypad_code'&&(
+              {editEntry.method==='keypad_code'&&(
                 <div><label style={labelStyle}>{t.accessPinLabel}</label><input style={inputStyle} placeholder={t.accessPinPlaceholder} value={editEntry.pin} onChange={e=>setEditEntry(p=>({...p,pin:e.target.value}))}/></div>
               )}
               {editMode !== 'correct' && (
